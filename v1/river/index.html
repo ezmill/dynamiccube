@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en" style="visibility: visible;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		
+		<title>river of slime</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #000000;
+				margin: 0px;
+				overflow: hidden;
+				/*cursor: none;*/
+			}
+			canvas{
+				width: 1440px;
+				height: 742px;
+			}
+		</style>
+	<style type="text/css"></style></head>
+	<body cz-shortcut-listen="true">
+
+		<script src="js/three.min.js"></script>
+		<script src="js/ThreeJsUtils.js"></script>
+
+		<script src="js/OrbitControls.js"></script>
+		<script src="js/FeedbackMaterial.js"></script>
+		<script src="js/CustomShaders.js"></script>
+		<script src="js/CCapture.min.js"></script>
+		<script src="js/gif.js"></script>
+		<script src="js/gif.worker.js"></script>
+		<script src="js/Whammy.js"></script>
+		<script id="vs" type="x-shader/x-vertex">
+
+			uniform sampler2D map;
+
+			uniform float width;
+			uniform float height;
+			uniform float nearClipping, farClipping;
+
+			varying vec2 vUv;
+
+			const float XtoZ = 1.11146; // tan( 1.0144686 / 2.0 ) * 2.0;
+			const float YtoZ = 0.83359; // tan( 0.7898090 / 2.0 ) * 2.0;
+
+			void main() {
+
+				vUv = vec2( position.x / width, 1.0 - ( position.y / height ) );
+
+				// vec4 color = texture2D( map, vUv );
+				// float depth = ( color.r + color.g + color.b ) / 3.0;
+
+				// Projection code by @kcmic
+
+				// float z = ( 1.0 - depth ) * (farClipping - nearClipping) + nearClipping;
+
+				vec4 pos = vec4(
+					( position.x / width - 0.5 ) * 10000.0 * XtoZ,
+					( position.y / height - 0.5 ) * 10000.0 * YtoZ,
+					-1000.0,
+					1.0);
+
+				gl_PointSize = 3.0;
+				gl_Position = projectionMatrix * modelViewMatrix * pos;
+
+			}
+
+		</script>
+
+		<script id="fs" type="x-shader/x-fragment">
+
+			uniform sampler2D map;
+
+			varying vec2 vUv;
+
+			void main() {
+
+				vec4 color = texture2D( map, vUv );
+				// gl_FragColor = vec4( color.r, color.g, color.b, smoothstep( 8000.0, -8000.0, gl_FragCoord.z / gl_FragCoord.w ) );
+				gl_FragColor = vec4( color.r, color.g, color.b, 1.0 );
+
+			}
+
+		</script>
+
+		<script>
+
+			var container;
+
+			var scene, camera, light, renderer;
+			var geometry, cube, mesh, material;
+			var mouse = new THREE.Vector2(), center;
+			var stats;
+			var container;
+			var scene, renderer, camera, controls;
+			var fbScene, fbRenderer, fbCamera, fbTexture, fbShaders, fbMaterial;
+			var mouseX = 0, mouseY = 0;
+			var time = 0;
+			var texture;
+			var windowHalfX = window.innerWidth / 2;
+			var w = window.innerWidth;
+			var windowHalfY = window.innerHeight / 2;
+			var h = window.innerHeight;
+
+			var start = Date.now(); 
+			var gradient, tex;
+			var meshes = [];
+			var obj;
+			var counter = 0;
+			var rtt;
+			var captureFrame = 0;
+			var sizeMult = 1;
+			var capturer = new CCapture( { format: 'webm', workersPath: 'js/' } );
+			var range = 100.0;
+			var video, texture;
+			var expand = false;
+			init();
+			fbInit();
+			animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+
+				// scene = new THREE.Scene();
+// 
+				// camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 1000000 );
+				// camera.position.set( 0, 0, 2452.1003559896444 );
+				// camera.position.set( 0, 0, 750 );
+				// scene.add( camera );
+
+
+
+				// renderer = new THREE.WebGLRenderer();
+				// renderer.setSize( window.innerWidth, window.innerHeight );
+				// renderer.setClearColor(0xffffff,1.0);
+
+				initCanvasTex();
+
+				// var mesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(100,100), new THREE.MeshBasicMaterial({map:texture}));
+
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+
+			}
+			function initCanvasTex(){
+				canvas = document.createElement("canvas");
+				canvas.width = window.innerWidth;
+				canvas.height = window.innerHeight;
+				ctx = canvas.getContext("2d");
+
+			    fbTexture = new THREE.Texture(canvas);
+			    fbTexture.needsUpdate = true;
+
+			}
+			var counter = 0;
+			function onDocumentMouseDown(){
+				// if(counter%2==0){
+				// 	mesh.visible = false;
+				// 	expand = true;
+				// } else {
+				// 	mesh.visible = true;
+				// 	expand = false;
+				// }
+				// counter++;
+			}
+
+
+			function animate() {
+			  // setTimeout(function() {
+					requestAnimationFrame( animate );
+			    // }, 1000 / 30);
+					render();
+
+			}
+
+			function render() {
+				// texture.needsUpdate = true;
+				many();
+				// camera.position.x += ( mouse.x - camera.position.x ) * 0.05;
+				// camera.position.y += ( - mouse.y - camera.position.y ) * 0.05;
+				// camera.lookAt( center );
+				// gradient.update();
+				// fbRenderer.render( scene, camera );
+			    fbDraw();
+
+
+			}
+
+			function fbInit(){
+
+			    fbScene = new THREE.Scene();
+			    fbCamera = new THREE.OrthographicCamera( window.innerWidth / - 2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / - 2, -10000, 10000 );
+			    fbCamera.position.set(0,0,0);
+
+			    // controls = new THREE.OrbitControls(fbCamera2);
+
+
+			    fbRenderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true/*, alpha: true*/});
+			    fbRenderer.setClearColor(0xffffff, 1.0);
+			    fbRenderer.setSize(window.innerWidth, window.innerHeight);
+			    container.appendChild(fbRenderer.domElement);
+
+			    fbScene = new THREE.Scene();
+			    
+
+			    var customShaders = new CustomShaders();
+			    var customShaders2 = new CustomShaders();
+
+			    // fbShaders = [ 
+			    //     customShaders.flowShader, 
+			    //     customShaders.blurShader, 
+			    //     customShaders.diffShader2, 
+			    //     customShaders.warp2, 
+			    //     customShaders.sharpenShader,
+			    //     customShaders.bumpShader
+			    // ];
+
+			    fbShaders = [ 
+			        customShaders.reposShader, 
+			        customShaders.blurShader, 
+			        customShaders.diffShader, 
+			        customShaders2.colorShader, 
+			        customShaders2.blurShader,
+			        customShaders.bumpShader
+			        // customShaders.flowShader, 
+			        // customShaders.blurShader, 
+			        // customShaders.diffShader, 
+			        // customShaders2.flowShader, 
+			        // customShaders2.blurShader,
+			        // customShaders.bumpShader
+			    ];
+
+			    fbMaterial = new FeedbackMaterial(fbRenderer, fbScene, fbCamera, fbTexture, fbShaders);
+			        
+			    fbMaterial.init();
+			    // fbScene.add(new THREE.Mesh(new THREE.PlaneBufferGeometry(window.innerWidth,window.innerHeight),new THREE.MeshBasicMaterial({map:fbTexture})));
+
+			    document.addEventListener( 'keydown', function(){screenshot(fbRenderer)}, false );
+			    // document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+			    // document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+			    // window.addEventListener( 'resize', onWindowResize, false );
+
+			}
+		function onDocumentMouseMove( event ) {
+
+				mouse.x = ( event.clientX - window.innerWidth / 2 ) * 8;
+				mouse.y = ( event.clientY - window.innerHeight / 2 ) * 8;
+
+			    unMappedMouseX = (event.clientX );
+			    unMappedMouseY = (event.clientY );
+			    // mouseX = map(unMappedMouseX, window.innerWidth, -1.0/range,1.0/range);
+			    mouseX = map(unMappedMouseX, window.innerWidth, -1.0,1.0);
+			    // mouseY = map(unMappedMouseY, window.innerHeight, -1.0/range,1.0/range);
+			    mouseY = map(unMappedMouseY, window.innerHeight, -1.0,1.0);
+			    
+			    
+			    for(var i = 0; i < fbMaterial.fbos.length; i++){
+			      // fbMaterial.fbos[i].material.uniforms.mouse.value = new THREE.Vector2(mouseX, mouseY);
+			      // fbMaterial.material.uniforms.mouse.value = new THREE.Vector2(window.innerWidth, 0);
+			    }
+    
+
+			}
+			function fbDraw(){
+ 
+			    time+=0.01;
+			    for(var i = 0; i < fbMaterial.fbos.length; i++){
+			      fbMaterial.fbos[i].material.uniforms.time.value = time;
+			      // fbMaterial.fbos[i].material.uniforms.mouse.value = new THREE.Vector2(Math.cos(time*Math.sin(time*0.05))*mouseX, Math.sin(time*Math.cos(time*0.05))*mouseY);
+			      fbMaterial.fbos[i].material.uniforms.mouse.value = new THREE.Vector2(mouseX, mouseY);
+			      // fbMaterial.fbos[i].material.uniforms.mouse.value = new THREE.Vector2(0.0,0.0);
+			      fbMaterial.material.uniforms.mouse.value = new THREE.Vector2(window.innerWidth, 0);
+			    }
+			    fbTexture.needsUpdate = true;
+			        
+			    fbMaterial.update();
+			    // if(expand){
+				    fbMaterial.expand(1.002);
+			    // }
+			    fbRenderer.render(fbScene, fbCamera);
+
+			    fbMaterial.getNewFrame();
+			    fbMaterial.swapBuffers();
+
+			    capturer.capture( fbRenderer.domElement );
+
+			    
+			}
+
+			function bezierX(x1, y1, x2, y2, hue){
+
+			    ctx.beginPath();
+
+			   // ctx.moveTo(x1+(0.5+ 0.5*Math.sin(time)*canvas.width), y1);
+			    //ctx.lineTo(x2+(0.5+ 0.5*Math.sin(time)*canvas.width), y2);
+			    ctx.moveTo(x1/*+Math.cos(time/50)*canvas.width*/, y1);
+			    ctx.lineTo(x2/*-Math.sin(time/50)*canvas.width*/, y2);
+
+			    ctx.lineWidth = lineWidth;
+			    
+			    // line color
+			    ctx.strokeStyle = hue;
+			    ctx.stroke();   
+			}
+			function bezierY(x1, y1, x2, y2, hue){
+			    ctx.beginPath();
+
+			    ctx.moveTo(x1, y1/*-Math.cos(time/40)*canvas.height*/);
+			    ctx.lineTo(x2, y2/*+Math.sin(time/40)*canvas.height*/);
+
+			    ctx.lineWidth = lineWidth;
+			    
+			    // line color
+			    ctx.strokeStyle = hue;
+			    ctx.stroke();  
+			}
+			var time = 0.5;
+			function many(){
+			    // time+=0.01;
+			    ctx.fillStyle = "white";
+			    ctx.fillRect(0, 0, canvas.width, canvas.height);
+			    var wy = canvas.width;
+			    var hy = 50;
+			    var wx = 50;
+			    var hx = canvas.height;
+			    var amp = 75;
+			    var distX = 3;
+			    var distY = 3;
+			    var alpha = 1.0;
+			    lineWidth = 0.5;
+		 	  for(var j = -canvas.height; j < canvas.height*2; j+=distY){
+			    	var r = Math.floor(map(0.5+0.5*Math.cos(time*4/3), 1, 0, 255));
+			    	var g = Math.floor(map(j, h, 0, 255));
+			    	var b = Math.floor(map(0.5+0.5*Math.sin(time/2), 1, 0, 255));
+			    	var color = "rgba("+r+","+g+", "+b+", "+alpha+")";
+			        bezierY(0,j, canvas.width, j,  color /*hslaColor(j/6, 100, 50, alpha)*/);  
+			    }
+			    for(var i = -canvas.width; i < canvas.width*2; i+=distX){
+			    	var r = Math.floor(map(i, w, 0, 255));
+			    	var g = Math.floor(map(0.5+0.5*Math.sin(time), 1, 0, 255));
+			    	var b = Math.floor(map(0.5+0.5*Math.cos(time*3/2), 1, 0, 255));
+			    	var color = "rgba("+r+","+g+", "+b+", "+alpha+")";
+			        bezierX(i, 0, i, canvas.height, color /*hslaColor(i/6, 100, 50, alpha)*/);  
+
+			    }
+			    //ctx.rotate(Math.PI/1000);
+
+
+			}
+
+			function hslaColor(h,s,l,a)
+			  {
+			    return 'hsla(' + h + ',' + s + '%,' + l + '%,' + a + ')';
+			  }
+
+		</script>
+		<!-- <div><canvas width="1440" height="742"></canvas></div> -->
+	
+
+</body></html>
